@@ -1213,7 +1213,13 @@ class MLAAttention(nn.Module, AttentionLayerBase):
             )
             and self.impl.masked_mha_workspace_fits(prefill)  # type: ignore[attr-defined]
         )
-        return (prefill.use_dense_mha or use_masked_mha) and not (
+        # Without an MLA prefill backend (e.g. SM120/SM121), dense-MHA prefill
+        # would assert in MLACommonBaseImpl.forward_mha. Route to the top-k
+        # MQA path instead, matching the "top-k MQA path only" warning.
+        use_dense_mha_eff = (
+            prefill.use_dense_mha and self.prefill_backend is not None
+        )
+        return (use_dense_mha_eff or use_masked_mha) and not (
             self._vllm_config.attention_config.sparse_mla_force_mqa
         )
 

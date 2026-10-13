@@ -358,7 +358,11 @@ class SparseMLACommonMetadataBuilder(AttentionMetadataBuilder[T]):
 
         prefill_max_seq_len = 0
         prefill: SparseMLAPrefillMetadata | None = None
-        if num_prefills > 0 and self._prefill_backend is not None:
+        # Build prefill metadata even without an MLA prefill backend (e.g.
+        # SM120/SM121): the top-k MQA path still consumes prefill metadata for
+        # spec-decode verify rows and chunked prefill. Only the backend-side
+        # prepare_metadata call requires a backend.
+        if num_prefills > 0:
             seq_lens_cpu = common_attn_metadata.seq_lens_cpu_upper_bound
             assert seq_lens_cpu is not None
             prefill_max_seq_len = int(
@@ -409,7 +413,8 @@ class SparseMLACommonMetadataBuilder(AttentionMetadataBuilder[T]):
                 topk_mask_workspace=self.topk_mask_workspace,
                 host_staging_plan=staging_plan,
             )
-            self._prefill_backend.prepare_metadata(prefill)
+            if self._prefill_backend is not None:
+                self._prefill_backend.prepare_metadata(prefill)
 
         return self.metadata_cls(  # type: ignore[call-arg]
             num_reqs=common_attn_metadata.num_reqs,
